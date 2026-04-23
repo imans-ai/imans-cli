@@ -1,0 +1,52 @@
+project_name: imans
+
+before:
+  hooks:
+    - go mod tidy
+    - go test ./...
+
+builds:
+  - id: imans
+    binary: imans
+    main: ./cmd/imans
+    env:
+      - CGO_ENABLED=0
+    ldflags:
+      - -s -w
+      - -X github.com/imans-ai/imans-cli/internal/version.Version={{ .Version }}
+      - -X github.com/imans-ai/imans-cli/internal/version.Commit={{ .Commit }}
+      - -X github.com/imans-ai/imans-cli/internal/version.BuildDate={{ .Date }}
+      - -X github.com/imans-ai/imans-cli/internal/version.SchemaVersion={{ .Env.SCHEMA_VERSION }}
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - id: default
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+brews:
+  - repository:
+      owner: imans-ai
+      name: homebrew-tap
+    homepage: https://github.com/imans-ai/imans-cli
+    description: Official CLI for the Imans public API.
+    license: Apache-2.0
+
+scoops:
+  - repository:
+      owner: imans-ai
+      name: scoop-bucket
+    homepage: https://github.com/imans-ai/imans-cli
+    description: Official CLI for the Imans public API.
+    license: Apache-2.0
