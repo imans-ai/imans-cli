@@ -40,6 +40,7 @@ type APIError struct {
 	Code    string
 	Detail  string
 	Details []string
+	TraceID string
 }
 
 func (e *APIError) Error() string {
@@ -58,7 +59,16 @@ func (e *APIError) ErrorDetail() string {
 }
 
 func (e *APIError) ErrorDetails() []string {
-	return e.Details
+	out := append([]string{}, e.Details...)
+	if e.Status >= 500 {
+		out = append(out, "This is a problem on the Imans API, not your request. Please retry; if it persists, contact support.")
+	}
+	if e.TraceID != "" {
+		// A stable identifier support/engineering can use to find the
+		// server-side error in logs.
+		out = append(out, "Trace ID: "+e.TraceID)
+	}
+	return out
 }
 
 func New(opts Options) (*Client, error) {
@@ -187,7 +197,7 @@ func getAll[T any](ctx context.Context, c *Client, path string, query url.Values
 func (c *Client) getJSON(ctx context.Context, path string, query url.Values, out any) error {
 	var lastErr error
 	for attempt := 0; attempt < 3; attempt++ {
-		status, body, err := c.do(ctx, http.MethodGet, path, query)
+		status, body, header, err := c.do(ctx, http.MethodGet, path, query)
 		if err != nil {
 			lastErr = err
 			if !shouldRetryError(err) || attempt == 2 {
@@ -203,7 +213,7 @@ func (c *Client) getJSON(ctx context.Context, path string, query url.Values, out
 			return nil
 		}
 
-		apiErr := parseAPIError(status, body)
+		apiErr := parseAPIError(status, body, header)
 		lastErr = apiErr
 		if !shouldRetryStatus(status) || attempt == 2 {
 			return apiErr
@@ -213,10 +223,10 @@ func (c *Client) getJSON(ctx context.Context, path string, query url.Values, out
 	return lastErr
 }
 
-func (c *Client) do(ctx context.Context, method, path string, query url.Values) (int, []byte, error) {
+func (c *Client) do(ctx context.Context, method, path string, query url.Values) (int, []byte, http.Header, error) {
 	requestURL, err := c.resolvePath(path)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	if len(query) > 0 {
 		requestURL.RawQuery = query.Encode()
@@ -224,7 +234,7 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values) 
 
 	req, err := http.NewRequestWithContext(ctx, method, requestURL.String(), nil)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
 	req.Header.Set("Authorization", "Token "+c.token)
 	req.Header.Set("Accept", "application/json")
@@ -234,15 +244,18 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values) 
 	resp, err := c.http.Do(req)
 	if err != nil {
 		c.debugLog(method, requestURL.String(), 0, time.Since(start))
-		return 0, nil, err
+		return 0, nil, nil, err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, nil, err
+	body, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return 0, nil, nil, readErr
+	}
+	if closeErr != nil {
+		return 0, nil, nil, closeErr
 	}
 	c.debugLog(method, requestURL.String(), resp.StatusCode, time.Since(start))
-	return resp.StatusCode, body, nil
+	return resp.StatusCode, body, resp.Header, nil
 }
 
 func (c *Client) resolvePath(raw string) (*url.URL, error) {
@@ -268,8 +281,16 @@ func (c *Client) debugLog(method, requestURL string, status int, duration time.D
 	_, _ = fmt.Fprintf(c.errOut, "DEBUG %s %s status=%d latency=%s\n", method, requestURL, status, duration.Round(time.Millisecond))
 }
 
-func parseAPIError(status int, body []byte) *APIError {
+func parseAPIError(status int, body []byte, header http.Header) *APIError {
 	errOut := &APIError{Status: status, Detail: fmt.Sprintf("request failed with status %d", status)}
+	if status >= 500 {
+		// 5xx bodies are often an HTML error page with no useful detail.
+		// Give a clear, non-alarming default; the trace ID (added below)
+		// makes it reportable.
+		errOut.Detail = fmt.Sprintf("the Imans API returned a server error (HTTP %d)", status)
+	}
+	errOut.TraceID = traceIDFromHeader(header)
+
 	var payload map[string]any
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return errOut
@@ -292,6 +313,28 @@ func parseAPIError(status int, body []byte) *APIError {
 		}
 	}
 	return errOut
+}
+
+// traceIDFromHeader extracts a stable request identifier from upstream
+// response headers. GCP's `X-Cloud-Trace-Context` is `TRACE_ID/SPAN_ID;o=1`;
+// we keep only TRACE_ID. Cloudflare's `CF-Ray` is used as a fallback.
+func traceIDFromHeader(header http.Header) string {
+	if header == nil {
+		return ""
+	}
+	if raw := header.Get("X-Cloud-Trace-Context"); raw != "" {
+		trace := raw
+		if i := strings.IndexAny(trace, "/;"); i >= 0 {
+			trace = trace[:i]
+		}
+		if trace = strings.TrimSpace(trace); trace != "" {
+			return trace
+		}
+	}
+	if ray := strings.TrimSpace(header.Get("CF-Ray")); ray != "" {
+		return ray
+	}
+	return ""
 }
 
 func shouldRetryStatus(status int) bool {

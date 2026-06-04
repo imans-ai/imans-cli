@@ -31,6 +31,8 @@ It uses saved profiles, secure token storage, explicit flags, and resource-orien
 ```text
 imans version
 
+imans login
+
 imans auth add
 imans auth test
 imans auth remove
@@ -104,7 +106,41 @@ make schema
 
 The default API base URL is `https://api.imans.ai/`.
 
-### 1. Add a profile
+### Fastest path: `imans login`
+
+For most users this is the only onboarding step:
+
+```bash
+imans login
+```
+
+It prompts you to paste your API token, validates it against the workspace
+endpoint, stores it securely, and makes the resulting profile active. On
+success you see a confirmation and can start using resource commands
+immediately:
+
+```text
+✓ Connected to Acme Co (ACME-01)
+active profile  acme-01
+base url        https://api.imans.ai/
+next            imans products list
+```
+
+The profile is named automatically from your workspace. Run `imans login`
+again with a different workspace token to add another workspace — each is
+saved as its own profile and the most recent login becomes active. Switch
+between them with `imans profile use <name>`. Pass `--profile <name>` to
+choose the name yourself.
+
+You can also supply the token non-interactively with `--token-stdin`,
+`--token-env <ENV_VAR_NAME>`, `--token`, or the `IMANS_TOKEN` environment
+variable — handy for scripts and CI.
+
+### Advanced: `imans auth add`
+
+`auth add` is the lower-level command for explicitly named profiles. It
+requires `--profile` and does not set the profile active unless you pass
+`--set-active`:
 
 ```bash
 read -rsp 'Imans token: ' IMANS_TOKEN && printf '\n'
@@ -288,10 +324,19 @@ Token storage behavior:
 
 - macOS: OS keychain backend
 - Windows: OS credential backend
-- Linux: secure keyring backend when available
-- fallback: development-only insecure file backend if `IMANS_INSECURE_FILE_SECRETS=1`
+- Linux: Secret Service keyring backend when available and unlocked
+- Linux without a keyring (headless servers, containers, or a WSL setup with no
+  configured keyring): automatic
+  fallback to an encrypted file under the config directory (`secrets.enc`)
+- explicit override: development-only plaintext file backend if
+  `IMANS_INSECURE_FILE_SECRETS=1`
 
-Linux is intended to fail closed by default if no secure backend is available.
+The Linux encrypted-file fallback keeps onboarding working out of the box where
+no OS keyring exists. The file is AES-256-GCM encrypted with a key derived from
+the machine and user identity, so it is never stored in plaintext and is not
+portable to other machines or users. It is not a substitute for an OS keyring:
+anything able to run as your user on your machine can recompute the key. Where a
+keyring is available it is always preferred.
 
 ## Compatibility and Versioning
 
