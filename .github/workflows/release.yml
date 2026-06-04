@@ -1,0 +1,42 @@
+name: release
+
+# Cuts a release when a version tag is pushed:
+#   git tag v0.1.0 && git push origin v0.1.0
+# GoReleaser builds the cross-platform archives, publishes a GitHub Release with
+# checksums, and updates the Homebrew tap and Scoop bucket.
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: release --clean
+        env:
+          # Creates the GitHub Release on this repo.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # PAT with write access to imans-ai/homebrew-tap and imans-ai/scoop-bucket.
+          # Falls back to GITHUB_TOKEN so a release without the secret still builds
+          # archives (the brew/scoop push step is what needs the PAT).
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          # Stamped into `imans version`. Set the SCHEMA_VERSION repo variable to
+          # the API contract version to enable the CLI's version-mismatch warning;
+          # left empty the warning is disabled (no false positives).
+          SCHEMA_VERSION: ${{ vars.SCHEMA_VERSION }}
