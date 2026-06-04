@@ -57,14 +57,20 @@ func NewStore(appName, configDir string) Store {
 }
 
 // keyringAvailable reports whether a working Secret Service keyring is reachable
-// by performing a throwaway write/delete probe.
+// by performing a throwaway write/delete probe. The probe key is randomized so
+// it can never collide with (and thus destroy) a real profile's secret, and a
+// failed cleanup is treated as probe failure so detection never leaves data
+// behind or mutates user secrets.
 func keyringAvailable(service string) bool {
-	const probeKey = "__imans_keyring_probe__"
+	probe := make([]byte, 8)
+	if _, err := io.ReadFull(rand.Reader, probe); err != nil {
+		return false
+	}
+	probeKey := "__imans_keyring_probe__:" + base64.RawURLEncoding.EncodeToString(probe)
 	if err := keyring.Set(service, probeKey, "1"); err != nil {
 		return false
 	}
-	_ = keyring.Delete(service, probeKey)
-	return true
+	return keyring.Delete(service, probeKey) == nil
 }
 
 // lazyStore resolves its concrete backend once, on first use.

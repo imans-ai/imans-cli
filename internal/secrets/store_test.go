@@ -2,6 +2,7 @@ package secrets
 
 import (
 	"bytes"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,7 +36,7 @@ func TestEncryptedFileStoreRoundTrip(t *testing.T) {
 	if err := store.Delete("acme"); err != nil {
 		t.Fatalf("Delete: %v", err)
 	}
-	if _, err := store.Get("acme"); err != ErrNotFound {
+	if _, err := store.Get("acme"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get after delete = %v, want ErrNotFound", err)
 	}
 }
@@ -79,7 +80,7 @@ func TestEncryptedFileStoreUnreadableTreatedAsEmpty(t *testing.T) {
 	store := newEncryptedFileStore(path, "imans")
 
 	// Corrupt/foreign contents should not error out; the user can re-login.
-	if _, err := store.Get("acme"); err != ErrNotFound {
+	if _, err := store.Get("acme"); !errors.Is(err, ErrNotFound) {
 		t.Fatalf("Get on corrupt file = %v, want ErrNotFound", err)
 	}
 	if err := store.Set("acme", "fresh"); err != nil {

@@ -166,11 +166,18 @@ func connectProfile(cmd *cobra.Command, app *cli.App, opts flags.Options, printe
 		alias = deriveAlias(workspace, baseURL, existing)
 	}
 
+	// Remember any existing token for this alias so a failed save can roll back
+	// to it instead of wiping a working profile on a re-login.
+	prevToken, hadPrev := "", false
+	if existing, gerr := app.Secrets.Get(alias); gerr == nil && existing != "" {
+		prevToken, hadPrev = existing, true
+	}
+
 	if err := app.Secrets.Set(alias, token); err != nil {
 		return connectResult{}, apperrors.WithDetails(
 			apperrors.Wrap(apperrors.ExitGeneric, "failed to store token securely", err),
-			"On Linux, a Secret Service keyring must be available and unlocked.",
-			"Development-only fallback: set IMANS_INSECURE_FILE_SECRETS=1 before running the command.",
+			"Secrets use the OS keychain when available, otherwise an encrypted local file.",
+			"Check that the config directory is writable. Set IMANS_INSECURE_FILE_SECRETS=1 only for local development to force plaintext storage.",
 		)
 	}
 
@@ -181,7 +188,13 @@ func connectProfile(cmd *cobra.Command, app *cli.App, opts flags.Options, printe
 		DefaultOutput: "text",
 	}
 	if err := app.Profiles.Save(alias, profile, setActive); err != nil {
-		_ = app.Secrets.Delete(alias)
+		// Roll back the secret: restore the prior token if we overwrote one,
+		// otherwise remove the token this command just created.
+		if hadPrev {
+			_ = app.Secrets.Set(alias, prevToken)
+		} else {
+			_ = app.Secrets.Delete(alias)
+		}
 		return connectResult{}, err
 	}
 	entry, err := app.Profiles.Show(alias)

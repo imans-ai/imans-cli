@@ -246,10 +246,13 @@ func (c *Client) do(ctx context.Context, method, path string, query url.Values) 
 		c.debugLog(method, requestURL.String(), 0, time.Since(start))
 		return 0, nil, nil, err
 	}
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return 0, nil, nil, err
+	body, readErr := io.ReadAll(resp.Body)
+	closeErr := resp.Body.Close()
+	if readErr != nil {
+		return 0, nil, nil, readErr
+	}
+	if closeErr != nil {
+		return 0, nil, nil, closeErr
 	}
 	c.debugLog(method, requestURL.String(), resp.StatusCode, time.Since(start))
 	return resp.StatusCode, body, resp.Header, nil

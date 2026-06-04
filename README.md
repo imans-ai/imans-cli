@@ -325,7 +325,8 @@ Token storage behavior:
 - macOS: OS keychain backend
 - Windows: OS credential backend
 - Linux: Secret Service keyring backend when available and unlocked
-- Linux without a keyring (headless servers, containers, WSL): automatic
+- Linux without a keyring (headless servers, containers, or a WSL setup with no
+  configured keyring): automatic
   fallback to an encrypted file under the config directory (`secrets.enc`)
 - explicit override: development-only plaintext file backend if
   `IMANS_INSECURE_FILE_SECRETS=1`
