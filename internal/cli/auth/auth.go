@@ -162,7 +162,8 @@ func connectProfile(cmd *cobra.Command, app *cli.App, opts flags.Options, printe
 
 	alias := explicitAlias
 	if alias == "" {
-		alias = deriveAlias(workspace)
+		existing, _ := app.Profiles.List()
+		alias = deriveAlias(workspace, baseURL, existing)
 	}
 
 	if err := app.Secrets.Set(alias, token); err != nil {
@@ -204,26 +205,90 @@ func addTokenFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("token-stdin", false, "Read the token from stdin")
 }
 
-// deriveAlias builds a stable, filesystem-friendly profile name from a workspace.
-func deriveAlias(ws generated.Workspace) string {
-	source := strings.ToLower(strings.TrimSpace(ws.WorkspaceCode))
-	if source == "" {
-		source = strings.ToLower(strings.TrimSpace(ws.Name))
+// deriveAlias builds a stable, friendly, filesystem-safe profile name for a
+// workspace. It prefers a slug of the workspace name (e.g. "Acme Co" ->
+// "acme-co") because workspace codes are opaque UUIDs that are painful to type
+// in `imans profile use <name>`. The code is used only as a fallback.
+//
+// Naming is deterministic per workspace so re-logging into the same workspace
+// refreshes the same profile instead of creating a duplicate:
+//   - If a profile for this exact workspace already exists, its current alias
+//     is reused (regardless of how it was originally named).
+//   - Otherwise the name slug is used; if that slug is already taken by a
+//     different workspace, a short workspace-code suffix disambiguates it.
+func deriveAlias(ws generated.Workspace, baseURL string, existing []profiles.Entry) string {
+	// 1. Reuse the existing alias for this exact workspace.
+	for _, entry := range existing {
+		if strings.EqualFold(entry.Profile.BaseURL, baseURL) && entry.Profile.WorkspaceCode == ws.WorkspaceCode {
+			return entry.Name
+		}
 	}
+
+	// 2. Build a friendly base from the name, falling back to the code.
+	base := slugify(ws.Name)
+	if base == "" {
+		base = slugify(ws.WorkspaceCode)
+	}
+	if base == "" {
+		base = "default"
+	}
+
+	taken := make(map[string]bool, len(existing))
+	for _, entry := range existing {
+		taken[entry.Name] = true
+	}
+	if !taken[base] {
+		return base
+	}
+
+	// 3. Disambiguate a name collision with a short, stable code suffix.
+	candidate := base
+	if suffix := shortCode(ws.WorkspaceCode); suffix != "" {
+		candidate = base + "-" + suffix
+	}
+	unique := candidate
+	for n := 2; taken[unique]; n++ {
+		unique = fmt.Sprintf("%s-%d", candidate, n)
+	}
+	return unique
+}
+
+// slugify lowercases input and keeps only [a-z0-9], turning separators into
+// single dashes and trimming leading/trailing dashes.
+func slugify(s string) string {
 	var b strings.Builder
-	for _, r := range source {
+	lastDash := false
+	for _, r := range strings.ToLower(strings.TrimSpace(s)) {
 		switch {
 		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
 			b.WriteRune(r)
+			lastDash = false
 		case r == ' ' || r == '_' || r == '-':
-			b.WriteByte('-')
+			if !lastDash {
+				b.WriteByte('-')
+				lastDash = true
+			}
 		}
 	}
-	alias := strings.Trim(b.String(), "-")
-	if alias == "" {
-		return "default"
+	return strings.Trim(b.String(), "-")
+}
+
+// shortCode returns the leading alphanumeric run of a workspace code, capped at
+// 8 characters — enough to disambiguate without dragging a full UUID into the
+// alias.
+func shortCode(code string) string {
+	var b strings.Builder
+	for _, r := range strings.ToLower(code) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			if b.Len() >= 8 {
+				break
+			}
+		} else if b.Len() > 0 {
+			break
+		}
 	}
-	return alias
+	return b.String()
 }
 
 func newTestCommand(app *cli.App) *cobra.Command {
