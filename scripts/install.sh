@@ -56,9 +56,11 @@ main() {
 	local version="${IMANS_VERSION:-}"
 	if [ -z "$version" ]; then
 		info "Resolving latest release..."
-		version="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-			| grep '"tag_name":' | head -n1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
-		[ -n "$version" ] || err "could not determine the latest release (set IMANS_VERSION to install a specific one)"
+		local latest_json
+		latest_json="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")" \
+			|| err "could not reach the GitHub API (network or rate limit?) — set IMANS_VERSION to install a specific version"
+		version="$(printf '%s' "$latest_json" | grep '"tag_name":' | head -n1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+		[ -n "$version" ] || err "could not parse the latest release tag — set IMANS_VERSION to install a specific version"
 	fi
 	local num_version="${version#v}"
 
@@ -92,7 +94,7 @@ main() {
 	# --- choose install dir ---
 	local dir="${IMANS_INSTALL_DIR:-}"
 	if [ -z "$dir" ]; then
-		if [ -w /usr/local/bin ] || { [ ! -e /usr/local/bin/$BINARY ] && mkdir -p /usr/local/bin 2>/dev/null && [ -w /usr/local/bin ]; }; then
+		if [ -w /usr/local/bin ] || { mkdir -p /usr/local/bin 2>/dev/null && [ -w /usr/local/bin ]; }; then
 			dir="/usr/local/bin"
 		else
 			dir="$HOME/.local/bin"
