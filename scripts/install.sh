@@ -59,7 +59,9 @@ main() {
 		local latest_json
 		latest_json="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest")" \
 			|| err "could not reach the GitHub API (network or rate limit?) — set IMANS_VERSION to install a specific version"
-		version="$(printf '%s' "$latest_json" | grep '"tag_name":' | head -n1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
+		# `|| true` so a no-match (set -o pipefail) leaves version empty and falls
+		# through to the friendly error below instead of aborting under set -e.
+		version="$(printf '%s' "$latest_json" | grep '"tag_name":' | head -n1 | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/' || true)"
 		[ -n "$version" ] || err "could not parse the latest release tag — set IMANS_VERSION to install a specific version"
 	fi
 	local num_version="${version#v}"
