@@ -264,9 +264,23 @@ func (c *Client) resolvePath(raw string) (*url.URL, error) {
 		return nil, err
 	}
 	if parsed.IsAbs() {
+		// Absolute URLs reach here only from server-provided pagination `next`
+		// links. Every request carries the Authorization header, so we must
+		// never follow one to a different origin: a compromised or misbehaving
+		// API/proxy could otherwise redirect the token to an attacker host.
+		if !sameOrigin(c.baseURL, parsed) {
+			return nil, fmt.Errorf("refusing to follow cross-origin URL %q: expected %s://%s", raw, c.baseURL.Scheme, c.baseURL.Host)
+		}
 		return parsed, nil
 	}
 	return c.baseURL.ResolveReference(parsed), nil
+}
+
+// sameOrigin reports whether two URLs share scheme and host (including port),
+// so the API token is only ever sent back to the configured API origin.
+func sameOrigin(base, other *url.URL) bool {
+	return strings.EqualFold(base.Scheme, other.Scheme) &&
+		strings.EqualFold(base.Host, other.Host)
 }
 
 func (c *Client) sleep(attempt int) {
