@@ -2,11 +2,69 @@ package client
 
 import (
 	"net/http"
+	"net/url"
 	"strings"
 	"testing"
 
 	"github.com/imans-ai/imans-cli/internal/apperrors"
 )
+
+func newTestClient(t *testing.T, base string) *Client {
+	t.Helper()
+	c, err := New(Options{BaseURL: base, Token: "secret"})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	return c
+}
+
+func TestResolvePathRejectsCrossOrigin(t *testing.T) {
+	c := newTestClient(t, "https://api.imans.ai/")
+
+	// Server-provided pagination links to a different origin must be refused,
+	// so the Authorization token is never sent off-origin.
+	bad := []string{
+		"https://attacker.example/v1/products/?page=2",
+		"http://api.imans.ai/v1/products/",       // scheme downgrade
+		"https://api.imans.ai.attacker.example/", // look-alike host
+		"https://api.imans.ai:8443/v1/products/", // different port
+	}
+	for _, raw := range bad {
+		if _, err := c.resolvePath(raw); err == nil {
+			t.Fatalf("resolvePath(%q) allowed a cross-origin URL", raw)
+		}
+	}
+}
+
+func TestResolvePathAllowsSameOriginAndRelative(t *testing.T) {
+	c := newTestClient(t, "https://api.imans.ai/")
+	ok := []string{
+		"v1/products/", // relative
+		"https://api.imans.ai/v1/products/?page=2", // same-origin absolute (normal next link)
+		"https://API.imans.ai/v1/products/",        // host case-insensitive
+	}
+	for _, raw := range ok {
+		got, err := c.resolvePath(raw)
+		if err != nil {
+			t.Fatalf("resolvePath(%q) rejected a valid URL: %v", raw, err)
+		}
+		if got.Host == "" {
+			t.Fatalf("resolvePath(%q) returned hostless URL", raw)
+		}
+	}
+}
+
+func TestSameOrigin(t *testing.T) {
+	base, _ := url.Parse("https://api.imans.ai/")
+	same, _ := url.Parse("https://api.imans.ai/x")
+	diff, _ := url.Parse("https://other.example/x")
+	if !sameOrigin(base, same) {
+		t.Fatal("same origin reported as different")
+	}
+	if sameOrigin(base, diff) {
+		t.Fatal("different origin reported as same")
+	}
+}
 
 func TestParseAPIError5xxIsActionable(t *testing.T) {
 	header := http.Header{}

@@ -1,6 +1,7 @@
 package profiles
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -97,17 +98,17 @@ func (s *Service) Remove(name string) error {
 	if err != nil {
 		return err
 	}
+	// Delete the token first. Orphaning a config entry is recoverable (just run
+	// remove again), but orphaning a stored token — with no CLI path left to
+	// delete it — is the worse failure for an auth CLI.
+	if err := s.secrets.Delete(resolved); err != nil && !errors.Is(err, secrets.ErrNotFound) {
+		return err
+	}
 	delete(cfg.Profiles, resolved)
 	if cfg.ActiveProfile == resolved {
 		cfg.ActiveProfile = ""
 	}
-	if err := s.config.Save(cfg); err != nil {
-		return err
-	}
-	if err := s.secrets.Delete(resolved); err != nil && err != secrets.ErrNotFound {
-		return err
-	}
-	return nil
+	return s.config.Save(cfg)
 }
 
 func (s *Service) Resolve(name string) (Entry, error) {
