@@ -1,3 +1,5 @@
+version: 2
+
 project_name: imans
 
 before:
@@ -27,6 +29,9 @@ builds:
 
 archives:
   - id: default
+    # Explicit, predictable names so scripts/install.sh can compute the asset
+    # URL: imans_<version>_<os>_<arch>.<ext> (e.g. imans_0.1.0_linux_amd64.tar.gz).
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
     format_overrides:
       - goos: windows
@@ -35,18 +40,36 @@ archives:
 checksum:
   name_template: checksums.txt
 
-brews:
+# Pushing formulae/manifests to the tap repos below needs write access to OTHER
+# repositories than this one, so the default GITHUB_TOKEN is not sufficient.
+# Provide a PAT as the HOMEBREW_TAP_GITHUB_TOKEN repository secret (used for both).
+homebrew_casks:
   - repository:
       owner: imans-ai
       name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: imans-release-bot
+      email: bot@imans.ai
     homepage: https://github.com/imans-ai/imans-cli
     description: Official CLI for the Imans public API.
-    license: Apache-2.0
+    # The binary is not notarized (signing intentionally deferred), so strip the
+    # quarantine attribute on install to avoid a Gatekeeper block on first run.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/imans"]
+          end
 
 scoops:
   - repository:
       owner: imans-ai
       name: scoop-bucket
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: imans-release-bot
+      email: bot@imans.ai
     homepage: https://github.com/imans-ai/imans-cli
     description: Official CLI for the Imans public API.
     license: Apache-2.0

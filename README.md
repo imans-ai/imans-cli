@@ -59,23 +59,43 @@ imans sales-order-classifications get <id>
 
 ## Install
 
-The repository is ready to build now. GitHub Releases, Homebrew, and Scoop automation are scaffolded, but if you are working from source today the most direct path is:
+### Quick install (macOS / Linux)
 
 ```bash
-make build
+curl -fsSL https://imans.ai/install | bash
 ```
 
-That creates a local binary named `imans` in the repository root.
+Downloads the right build for your OS/architecture from GitHub Releases,
+verifies its SHA-256 checksum, and installs the `imans` binary to
+`/usr/local/bin` (or `~/.local/bin` if that is not writable). Override with
+`IMANS_VERSION`, `IMANS_INSTALL_DIR`, or `IMANS_RELEASE_BASE` (mirror).
 
-To install it for your current Linux user:
+### Homebrew (macOS / Linux)
 
 ```bash
-mkdir -p "$HOME/.local/bin"
-cp ./imans "$HOME/.local/bin/imans"
-chmod +x "$HOME/.local/bin/imans"
+brew install imans-ai/tap/imans
 ```
 
-If `~/.local/bin` is on your `PATH`, you can then run:
+### Scoop (Windows)
+
+```powershell
+scoop bucket add imans https://github.com/imans-ai/scoop-bucket
+scoop install imans
+```
+
+### Direct download
+
+Grab a prebuilt archive for your platform from the
+[Releases page](https://github.com/imans-ai/imans-cli/releases), verify it
+against `checksums.txt`, extract `imans`, and put it on your `PATH`.
+
+### From source
+
+```bash
+make build   # produces ./imans in the repo root
+```
+
+Then verify:
 
 ```bash
 imans version
