@@ -1,4 +1,6 @@
 .DS_Store
 dist/
-imans
+# The built binary at the repo root only. Anchored with a leading slash so it
+# does not also match the cmd/imans/ source directory.
+/imans
 coverage.out
