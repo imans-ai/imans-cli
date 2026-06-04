@@ -26,6 +26,7 @@ func New(app *cli.App) *cobra.Command {
 	flags.AddPersistentFlags(cmd)
 
 	cmd.AddCommand(newVersionCommand(app))
+	cmd.AddCommand(auth.NewLogin(app))
 	cmd.AddCommand(auth.New(app))
 	cmd.AddCommand(profile.New(app))
 	cmd.AddCommand(workspace.New(app))

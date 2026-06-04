@@ -11,6 +11,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/imans-ai/imans-cli/api/generated"
 	"github.com/imans-ai/imans-cli/internal/apperrors"
 	"github.com/imans-ai/imans-cli/internal/cli"
 	"github.com/imans-ai/imans-cli/internal/cli/common"
@@ -18,6 +19,7 @@ import (
 	"github.com/imans-ai/imans-cli/internal/client"
 	"github.com/imans-ai/imans-cli/internal/config"
 	"github.com/imans-ai/imans-cli/internal/output"
+	"github.com/imans-ai/imans-cli/internal/profiles"
 )
 
 const defaultBaseURL = "https://api.imans.ai/"
@@ -27,6 +29,52 @@ func New(app *cli.App) *cobra.Command {
 	cmd.AddCommand(newAddCommand(app))
 	cmd.AddCommand(newTestCommand(app))
 	cmd.AddCommand(newRemoveCommand(app))
+	return cmd
+}
+
+// NewLogin is the friendly, flag-light entry point exposed at the top level as
+// `imans login`. It prompts for a token, validates it, saves a profile, and
+// makes it active so the user can run resource commands immediately.
+func NewLogin(app *cli.App) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "login",
+		Short: "Log in with an API token and start using the CLI",
+		Long: "Log in with an Imans API token.\n\n" +
+			"You will be prompted to paste your token (or pass it with --token-stdin,\n" +
+			"--token-env, or IMANS_TOKEN). The token is validated against the workspace\n" +
+			"endpoint, stored securely, and the resulting profile is made active.\n\n" +
+			"Run login again with a different workspace token to add another workspace;\n" +
+			"each workspace is saved as its own profile and the most recent login becomes\n" +
+			"active. Switch between them with `imans profile use <name>`.",
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts := flags.OptionsFromCommand(cmd)
+			printer := app.Printer(opts.JSON, opts.Quiet)
+			// An explicit --profile names the profile; otherwise it is derived
+			// from the workspace so each workspace gets a stable alias.
+			res, err := connectProfile(cmd, app, opts, printer, strings.TrimSpace(opts.Profile), true)
+			if err != nil {
+				return err
+			}
+
+			if opts.JSON {
+				return printer.PrintJSON(map[string]any{
+					"profile":   res.alias,
+					"base_url":  res.baseURL,
+					"workspace": res.workspace,
+					"active":    res.entry.Active,
+					"success":   true,
+				})
+			}
+			printer.Successf("✓ Connected to %s (%s)", res.workspace.Name, res.workspace.WorkspaceCode)
+			return printer.PrintKeyValues([]output.KeyValue{
+				{Key: "active profile", Value: res.alias},
+				{Key: "base url", Value: res.baseURL},
+				{Key: "next", Value: "imans products list"},
+			})
+		},
+	}
+	addTokenFlags(cmd)
 	return cmd
 }
 
@@ -41,85 +89,141 @@ func newAddCommand(app *cli.App) *cobra.Command {
 				return apperrors.MissingFlag(flags.FlagProfile)
 			}
 
-			baseURL, _ := cmd.Flags().GetString("base-url")
-			baseURL = normalizeBaseURL(baseURL)
-
-			token, err := readToken(cmd, app.IO.In, app.IO.Out)
-			if err != nil {
-				return err
-			}
-
-			if err := app.Secrets.Set(alias, token); err != nil {
-				return apperrors.Wrap(apperrors.ExitGeneric, "failed to store token securely", err)
-			}
-
-			apiClient, err := client.New(client.Options{
-				BaseURL:   baseURL,
-				Token:     token,
-				UserAgent: fmt.Sprintf("imans-cli/%s", app.Version.Version),
-				Debug:     opts.Debug,
-				ErrOut:    app.IO.ErrOut,
-			})
-			if err != nil {
-				_ = app.Secrets.Delete(alias)
-				return err
-			}
-
-			ctx := context.Background()
-			workspace, err := apiClient.Workspace(ctx)
-			if err != nil {
-				_ = app.Secrets.Delete(alias)
-				return err
-			}
-
 			setActive, _ := cmd.Flags().GetBool("set-active")
-			profile := config.Profile{
-				BaseURL:       baseURL,
-				WorkspaceCode: workspace.WorkspaceCode,
-				WorkspaceName: workspace.Name,
-				DefaultOutput: "text",
-			}
-			if err := app.Profiles.Save(alias, profile, setActive); err != nil {
-				_ = app.Secrets.Delete(alias)
-				return err
-			}
-			entry, err := app.Profiles.Show(alias)
+			printer := app.Printer(opts.JSON, opts.Quiet)
+			res, err := connectProfile(cmd, app, opts, printer, alias, setActive)
 			if err != nil {
 				return err
-			}
-
-			printer := app.Printer(opts.JSON, opts.Quiet)
-			common.WarnOnVersionMismatch(ctx, app.Version.SchemaVersion, printer, apiClient)
-
-			duplicates, err := app.Profiles.DuplicateWorkspaceAliases(baseURL, workspace.WorkspaceCode, alias)
-			if err == nil && len(duplicates) > 0 {
-				printer.Warnf("Warning: workspace %s is also saved as %s", workspace.Name, strings.Join(duplicates, ", "))
 			}
 
 			if opts.JSON {
 				return printer.PrintJSON(map[string]any{
-					"profile":   alias,
-					"base_url":  baseURL,
-					"workspace": workspace,
-					"active":    entry.Active,
+					"profile":   res.alias,
+					"base_url":  res.baseURL,
+					"workspace": res.workspace,
+					"active":    res.entry.Active,
 				})
 			}
 			return printer.PrintKeyValues([]output.KeyValue{
-				{Key: "profile", Value: alias},
-				{Key: "base_url", Value: baseURL},
-				{Key: "workspace_name", Value: workspace.Name},
-				{Key: "workspace_code", Value: workspace.WorkspaceCode},
-				{Key: "active", Value: common.BoolString(entry.Active)},
-				{Key: "status", Value: workspace.Status},
+				{Key: "profile", Value: res.alias},
+				{Key: "base_url", Value: res.baseURL},
+				{Key: "workspace_name", Value: res.workspace.Name},
+				{Key: "workspace_code", Value: res.workspace.WorkspaceCode},
+				{Key: "active", Value: common.BoolString(res.entry.Active)},
+				{Key: "status", Value: res.workspace.Status},
 			})
 		},
 	}
+	addTokenFlags(cmd)
+	cmd.Flags().Bool("set-active", false, "Set this profile as the active default")
+	return cmd
+}
+
+// connectResult carries the outcome of a successful login/add for output.
+type connectResult struct {
+	alias     string
+	baseURL   string
+	workspace generated.Workspace
+	entry     profiles.Entry
+}
+
+// connectProfile validates a token against the workspace endpoint, then stores
+// the token and saves the profile. It is shared by `auth add` and `login`.
+//
+// When explicitAlias is empty the alias is derived from the validated workspace,
+// so each workspace maps to a stable profile name and re-running login refreshes
+// that workspace's token instead of creating a duplicate.
+func connectProfile(cmd *cobra.Command, app *cli.App, opts flags.Options, printer *output.Printer, explicitAlias string, setActive bool) (connectResult, error) {
+	baseURL, _ := cmd.Flags().GetString("base-url")
+	baseURL = normalizeBaseURL(baseURL)
+
+	token, err := readToken(cmd, app.IO.In, app.IO.Out)
+	if err != nil {
+		return connectResult{}, err
+	}
+
+	apiClient, err := client.New(client.Options{
+		BaseURL:   baseURL,
+		Token:     token,
+		UserAgent: fmt.Sprintf("imans-cli/%s", app.Version.Version),
+		Debug:     opts.Debug,
+		ErrOut:    app.IO.ErrOut,
+	})
+	if err != nil {
+		return connectResult{}, err
+	}
+
+	// Validate before persisting anything so a bad token leaves no trace.
+	ctx := context.Background()
+	workspace, err := apiClient.Workspace(ctx)
+	if err != nil {
+		return connectResult{}, err
+	}
+
+	alias := explicitAlias
+	if alias == "" {
+		alias = deriveAlias(workspace)
+	}
+
+	if err := app.Secrets.Set(alias, token); err != nil {
+		return connectResult{}, apperrors.WithDetails(
+			apperrors.Wrap(apperrors.ExitGeneric, "failed to store token securely", err),
+			"On Linux, a Secret Service keyring must be available and unlocked.",
+			"Development-only fallback: set IMANS_INSECURE_FILE_SECRETS=1 before running the command.",
+		)
+	}
+
+	profile := config.Profile{
+		BaseURL:       baseURL,
+		WorkspaceCode: workspace.WorkspaceCode,
+		WorkspaceName: workspace.Name,
+		DefaultOutput: "text",
+	}
+	if err := app.Profiles.Save(alias, profile, setActive); err != nil {
+		_ = app.Secrets.Delete(alias)
+		return connectResult{}, err
+	}
+	entry, err := app.Profiles.Show(alias)
+	if err != nil {
+		return connectResult{}, err
+	}
+
+	common.WarnOnVersionMismatch(ctx, app.Version.SchemaVersion, printer, apiClient)
+
+	if duplicates, derr := app.Profiles.DuplicateWorkspaceAliases(baseURL, workspace.WorkspaceCode, alias); derr == nil && len(duplicates) > 0 {
+		printer.Warnf("Warning: workspace %s is also saved as %s", workspace.Name, strings.Join(duplicates, ", "))
+	}
+
+	return connectResult{alias: alias, baseURL: baseURL, workspace: workspace, entry: entry}, nil
+}
+
+func addTokenFlags(cmd *cobra.Command) {
 	cmd.Flags().String("base-url", defaultBaseURL, "Imans API base URL")
 	cmd.Flags().String("token", "", "API token value")
 	cmd.Flags().String("token-env", "", "Read the token from a named environment variable")
 	cmd.Flags().Bool("token-stdin", false, "Read the token from stdin")
-	cmd.Flags().Bool("set-active", false, "Set this profile as the active default")
-	return cmd
+}
+
+// deriveAlias builds a stable, filesystem-friendly profile name from a workspace.
+func deriveAlias(ws generated.Workspace) string {
+	source := strings.ToLower(strings.TrimSpace(ws.WorkspaceCode))
+	if source == "" {
+		source = strings.ToLower(strings.TrimSpace(ws.Name))
+	}
+	var b strings.Builder
+	for _, r := range source {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == ' ' || r == '_' || r == '-':
+			b.WriteByte('-')
+		}
+	}
+	alias := strings.Trim(b.String(), "-")
+	if alias == "" {
+		return "default"
+	}
+	return alias
 }
 
 func newTestCommand(app *cli.App) *cobra.Command {

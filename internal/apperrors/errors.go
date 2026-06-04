@@ -112,6 +112,9 @@ func Format(err error) string {
 	var appErr *Error
 	if stderrors.As(err, &appErr) {
 		parts := []string{appErr.Message}
+		if appErr.Err != nil {
+			parts = append(parts, appErr.Err.Error())
+		}
 		parts = append(parts, appErr.Details...)
 		return strings.Join(filterEmpty(parts), "\n")
 	}

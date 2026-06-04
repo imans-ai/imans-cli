@@ -61,6 +61,12 @@ func (p *Printer) PrintKeyValues(items []KeyValue) error {
 	return nil
 }
 
+// Successf writes a primary success line to stdout. Unlike Warnf it is not
+// suppressed by --quiet, since it is part of the command's main output.
+func (p *Printer) Successf(format string, args ...any) {
+	_, _ = fmt.Fprintf(p.Out, format+"\n", args...)
+}
+
 func (p *Printer) Warnf(format string, args ...any) {
 	if p.Quiet {
 		return
