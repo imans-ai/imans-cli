@@ -4,3 +4,4 @@ dist/
 # does not also match the cmd/imans/ source directory.
 /imans
 coverage.out
+/opencode.json
