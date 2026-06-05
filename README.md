@@ -101,6 +101,44 @@ Then verify:
 imans version
 ```
 
+## Agent Skills
+
+This repository includes skills that teach AI agents how to use the `imans` CLI
+for workspace, catalog, and sales order workflows.
+
+Install the general skill with the skills CLI:
+
+```bash
+npx skills add imans-ai/imans-cli
+```
+
+Install the OpenClaw-specific skill after it is published to ClawHub:
+
+```bash
+openclaw skills install imans-openclaw
+```
+
+For local testing from a checkout, install the skill directory directly:
+
+```bash
+openclaw skills install ./skills/imans-openclaw --as imans-openclaw
+```
+
+The skills live in:
+
+- `skills/imans/SKILL.md`
+- `skills/imans-openclaw/SKILL.md`
+- `skills/imans-openclaw/skill-card.md`
+
+Maintainers can publish the OpenClaw skill to ClawHub under the `imans-ai`
+owner:
+
+```bash
+clawhub login
+clawhub sync --dry-run --owner imans-ai
+clawhub sync --all --owner imans-ai
+```
+
 ## Build From Source
 
 Requirements:
