@@ -5,3 +5,7 @@ dist/
 /imans
 coverage.out
 /opencode.json
+
+# Local agent skill installs created by `npx skills add`.
+/.agents/
+/skills-lock.json
