@@ -1,0 +1,11 @@
+{
+  "name": "imans",
+  "description": "Use the Imans CLI to query Imans workspace, catalog, and sales order data from Claude Code.",
+  "version": "1.0.0",
+  "author": {
+    "name": "Imans AI"
+  },
+  "homepage": "https://github.com/imans-ai/imans-cli",
+  "repository": "https://github.com/imans-ai/imans-cli",
+  "license": "Apache-2.0"
+}

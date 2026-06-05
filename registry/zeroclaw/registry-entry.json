@@ -1,0 +1,11 @@
+{
+  "name": "imans",
+  "description": "Use the Imans CLI to query Imans workspace, catalog, product, variant, and sales order data as JSON.",
+  "version": "1.0.0",
+  "author": "imans-ai",
+  "license": "Apache-2.0",
+  "category": "data",
+  "tags": ["Community", "CLI", "Business", "Catalog", "Sales"],
+  "permissions": ["shell_exec"],
+  "source": "https://github.com/imans-ai/imans-cli/tree/main/registry/zeroclaw/imans"
+}

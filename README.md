@@ -139,6 +139,51 @@ clawhub sync --dry-run --owner imans-ai
 clawhub sync --all --owner imans-ai
 ```
 
+### Other Agent Platforms
+
+The repo also includes submission-ready packages for agent ecosystems that need
+platform-specific artifacts:
+
+| Platform | Status | Path / action |
+|---|---|---|
+| Claude Code / Claude Cowork | package-ready | `plugins/claude-imans`; validate with `claude plugin validate ./plugins/claude-imans`, then submit through Claude's community plugin form. |
+| ZeroClaw | PR-ready | `registry/zeroclaw/imans` plus `registry/zeroclaw/registry-entry.json`; copy into `zeroclaw-labs/zeroclaw-skills` and open a PR. |
+| NanoClaw | PR-ready | `registry/nanoclaw/imans` plus `registry/nanoclaw/marketplace-entry.json`; copy into the NanoClaw skills marketplace format and open a PR. |
+| Hermes Agent | covered | Uses Agent Skills, GitHub taps, `skills.sh`, and ClawHub-compatible sources; use `skills/imans/SKILL.md` or the published `skills.sh` repo. |
+| PicoClaw | covered | Supports ClawHub/GitHub-style skills; use the published `imans-claw` ClawHub skill or this repo's `skills/` folder. |
+| Manus | manual import | Supports Agent Skills, but no public third-party publishing flow was found; import/adapt `skills/imans/SKILL.md` in a Manus workspace/team. |
+| Perplexity Computer | no hub | No public third-party skill/plugin publishing surface was found. |
+| TrustClaw | no hub | No TrustClaw-native skill registry was found; integrations appear to go through Composio toolkits instead. |
+
+Claude community plugin submission:
+
+```bash
+claude plugin validate ./plugins/claude-imans
+claude --plugin-dir ./plugins/claude-imans
+```
+
+Then submit through one of:
+
+- `https://claude.ai/settings/plugins/submit`
+- `https://platform.claude.com/plugins/submit`
+
+ZeroClaw submission:
+
+```bash
+# In a fork of zeroclaw-labs/zeroclaw-skills
+mkdir -p skills/imans
+cp -R /path/to/imans-cli/registry/zeroclaw/imans/* skills/imans/
+# Add registry/zeroclaw/registry-entry.json to that repo's registry.json shape.
+```
+
+NanoClaw submission:
+
+```bash
+# In a fork of the NanoClaw skills marketplace
+cp -R /path/to/imans-cli/registry/nanoclaw/imans ./imans
+# Adapt registry/nanoclaw/marketplace-entry.json to the target marketplace schema.
+```
+
 ## Build From Source
 
 Requirements:

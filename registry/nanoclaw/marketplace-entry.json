@@ -1,0 +1,8 @@
+{
+  "name": "imans",
+  "description": "Use the Imans CLI from NanoClaw containers to query Imans workspace, catalog, and sales order data as JSON.",
+  "version": "1.0.0",
+  "author": "imans-ai",
+  "license": "Apache-2.0",
+  "source": "https://github.com/imans-ai/imans-cli/tree/main/registry/nanoclaw/imans"
+}
