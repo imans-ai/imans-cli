@@ -115,20 +115,20 @@ npx skills add imans-ai/imans-cli
 Install the OpenClaw-specific skill after it is published to ClawHub:
 
 ```bash
-openclaw skills install imans-openclaw
+openclaw skills install imans-claw
 ```
 
 For local testing from a checkout, install the skill directory directly:
 
 ```bash
-openclaw skills install ./skills/imans-openclaw --as imans-openclaw
+openclaw skills install ./skills/imans-claw --as imans-claw
 ```
 
 The skills live in:
 
 - `skills/imans/SKILL.md`
-- `skills/imans-openclaw/SKILL.md`
-- `skills/imans-openclaw/skill-card.md`
+- `skills/imans-claw/SKILL.md`
+- `skills/imans-claw/skill-card.md`
 
 Maintainers can publish the OpenClaw skill to ClawHub under the `imans-ai`
 owner:

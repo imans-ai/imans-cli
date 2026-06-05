@@ -1,5 +1,5 @@
 ---
-name: imans-openclaw
+name: imans-claw
 description: Use the Imans CLI from OpenClaw agents to query Imans workspace, catalog, and sales order data as JSON. Use when OpenClaw users ask about Imans products, variants, sales orders, workspace metadata, or CLI-based Imans automation.
 homepage: https://github.com/imans-ai/imans-cli
 metadata: {"openclaw":{"emoji":"📊","requires":{"bins":["imans"]},"install":[{"id":"brew","kind":"brew","formula":"imans-ai/tap/imans","bins":["imans"],"label":"Install imans (brew)"},{"id":"download","kind":"download","url":"https://github.com/imans-ai/imans-cli/releases/latest","bins":["imans"],"label":"Download imans release"}]}}
@@ -14,7 +14,7 @@ Use `imans` when an OpenClaw user asks for Imans workspace, catalog, product var
 - The `imans` binary must be on the host `PATH` where OpenClaw executes shell commands.
 - If the agent runs in a sandbox or container, install `imans` inside that sandbox too.
 - Verify the skill is loaded with `openclaw skills list`.
-- Test the skill explicitly with `/skill imans-openclaw` or by asking for Imans product or order data.
+- Test the skill explicitly with `/skill imans-claw` or by asking for Imans product or order data.
 
 ## Imans Setup
 

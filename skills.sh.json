@@ -5,7 +5,7 @@
     {
       "title": "Imans CLI",
       "description": "Skills that teach agents how to use the Imans CLI.",
-      "skills": ["imans", "imans-openclaw"]
+      "skills": ["imans", "imans-claw"]
     }
   ]
 }
